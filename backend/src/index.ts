@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { errorHandler, notFoundHandler } from './api/errorHandler.js';
 
 // Load environment variables
 dotenv.config();
@@ -71,40 +72,10 @@ app.get('/', (req, res) => {
 });
 
 // 404 handler - must be after all routes
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: {
-      code: 'NOT_FOUND',
-      message: `Route ${req.method} ${req.path} not found`,
-    },
-  });
-});
+app.use(notFoundHandler);
 
 // Global error handler - must be last
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  // Log error (in production, use proper logging service)
-  console.error('Error:', {
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    path: req.path,
-    method: req.method,
-  });
-
-  // Determine status code
-  const statusCode = err.status || err.statusCode || 500;
-
-  // Send error response
-  res.status(statusCode).json({
-    success: false,
-    error: {
-      code: err.code || 'INTERNAL_SERVER_ERROR',
-      message: err.message || 'An unexpected error occurred',
-      ...(err.details && { details: err.details }),
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-    },
-  });
-});
+app.use(errorHandler);
 
 // Start server
 const server = app.listen(PORT, () => {
