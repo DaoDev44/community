@@ -1,0 +1,390 @@
+// CommUnity Platform - Prisma Schema
+// Database: PostgreSQL 15+
+// Generated: 2025-10-16
+// Entities: 16 (User, OAuthAccount, DonatorProfile, RecipientProfile, VerificationRequest,
+//              Need, Donation, DonationItem, MarketplacePartner, MarketplaceProduct,
+//              Order, OrderItem, Cause, RecipientCause, Milestone)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum UserRole {
+  donator
+  recipient
+  admin
+}
+
+enum OAuthProvider {
+  google
+  amazon
+  facebook
+}
+
+enum VerificationStatus {
+  pending
+  verified
+  rejected
+  flagged
+}
+
+enum RecipientType {
+  individual
+  organization
+}
+
+enum VerificationRequestStatus {
+  submitted
+  under_review
+  approved
+  rejected
+  additional_info_required
+}
+
+enum NeedType {
+  housing
+  food
+  medical
+  education
+  other
+}
+
+enum Urgency {
+  low
+  medium
+  high
+  critical
+}
+
+enum PaymentMethod {
+  credit_card
+  debit_card
+  google_pay
+  apple_pay
+  cryptocurrency
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  failed
+  refunded
+}
+
+enum FulfillmentStatus {
+  pending
+  order_placed
+  shipped
+  delivered
+  failed
+}
+
+enum OrderStatus {
+  pending
+  placed
+  confirmed
+  shipped
+  delivered
+  failed
+  cancelled
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+model User {
+  id                String              @id @default(uuid())
+  email             String              @unique
+  emailVerified     Boolean             @default(false)
+  passwordHash      String?
+  role              UserRole
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  lastLoginAt       DateTime?
+
+  // Relationships
+  oauthAccounts     OAuthAccount[]
+  donatorProfile    DonatorProfile?
+  recipientProfile  RecipientProfile?
+  donations         Donation[]          @relation("DonatorDonations")
+  receivedDonations Donation[]          @relation("RecipientDonations")
+  needs             Need[]
+  verificationRequest VerificationRequest?
+  reviewedVerifications VerificationRequest[] @relation("Reviewer")
+  milestones        Milestone[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model OAuthAccount {
+  id                String         @id @default(uuid())
+  userId            String
+  provider          OAuthProvider
+  providerAccountId String
+  accessToken       String?        @db.Text
+  refreshToken      String?        @db.Text
+  expiresAt         DateTime?
+  createdAt         DateTime       @default(now())
+
+  // Relationships
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([provider, providerAccountId])
+}
+
+model DonatorProfile {
+  id              String          @id @default(uuid())
+  userId          String          @unique
+  displayName     String?
+  totalDonated    Decimal         @default(0) @db.Decimal(10, 2)
+  donationCount   Int             @default(0)
+  recipientsHelped Int            @default(0)
+  preferences     Json            @default("{}")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relationships
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RecipientProfile {
+  id                String              @id @default(uuid())
+  userId            String              @unique
+  recipientType     RecipientType
+  displayName       String
+  story             String              @db.Text
+  location          String
+  photoUrls         String[]
+  verificationStatus VerificationStatus @default(pending)
+  verificationBadge String?
+  deliveryAddress   Json?
+  organizationTaxId String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  // Relationships
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipientCauses   RecipientCause[]
+
+  @@index([verificationStatus])
+  @@index([location])
+}
+
+model VerificationRequest {
+  id              String                      @id @default(uuid())
+  recipientId     String                      @unique
+  documentUrls    String[]
+  status          VerificationRequestStatus   @default(submitted)
+  submittedAt     DateTime                    @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  reviewerNotes   String?                     @db.Text
+  rejectionReason String?                     @db.Text
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  // Relationships
+  recipient       User                        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  reviewer        User?                       @relation("Reviewer", fields: [reviewedBy], references: [id])
+}
+
+model Need {
+  id                  String         @id @default(uuid())
+  recipientId         String
+  title               String
+  description         String         @db.Text
+  marketplaceProductId String?
+  customProductDetails Json?
+  quantity            Int
+  quantityFulfilled   Int            @default(0)
+  unitPrice           Decimal        @db.Decimal(10, 2)
+  urgency             Urgency        @default(medium)
+  needType            NeedType
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  // Relationships
+  recipient           User           @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  marketplaceProduct  MarketplaceProduct? @relation(fields: [marketplaceProductId], references: [id])
+  donationItems       DonationItem[]
+
+  @@index([needType])
+}
+
+model Donation {
+  id                  String            @id @default(uuid())
+  donatorId           String
+  recipientId         String
+  totalAmount         Decimal           @db.Decimal(10, 2)
+  paymentMethod       PaymentMethod
+  paymentIntentId     String            @unique
+  paymentStatus       PaymentStatus     @default(pending)
+  cryptoCurrency      String?
+  cryptoAmount        Decimal?          @db.Decimal(18, 8)
+  cryptoExchangeRate  Decimal?          @db.Decimal(10, 2)
+  affiliateCommission Decimal           @default(0) @db.Decimal(10, 2)
+  taxReceiptUrl       String?
+  message             String?           @db.Text
+  isAnonymous         Boolean           @default(false)
+  fulfillmentStatus   FulfillmentStatus @default(pending)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  // Relationships
+  donator             User              @relation("DonatorDonations", fields: [donatorId], references: [id])
+  recipient           User              @relation("RecipientDonations", fields: [recipientId], references: [id])
+  donationItems       DonationItem[]
+  order               Order?
+
+  @@index([donatorId, createdAt(sort: Desc)])
+  @@index([recipientId, createdAt(sort: Desc)])
+  @@index([paymentStatus])
+}
+
+model DonationItem {
+  id          String    @id @default(uuid())
+  donationId  String
+  needId      String
+  quantity    Int
+  unitPrice   Decimal   @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now())
+
+  // Relationships
+  donation    Donation  @relation(fields: [donationId], references: [id], onDelete: Cascade)
+  need        Need      @relation(fields: [needId], references: [id])
+
+  @@unique([donationId, needId])
+}
+
+model MarketplacePartner {
+  id                 String               @id @default(uuid())
+  name               String               @unique
+  apiEndpoint        String
+  apiKeyHash         String
+  affiliateProgramId String
+  commissionRate     Decimal              @db.Decimal(5, 2)
+  isActive           Boolean              @default(true)
+  apiRateLimit       Int
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  // Relationships
+  products           MarketplaceProduct[]
+  orders             Order[]
+}
+
+model MarketplaceProduct {
+  id            String             @id @default(uuid())
+  partnerId     String
+  externalId    String
+  title         String
+  description   String?            @db.Text
+  price         Decimal            @db.Decimal(10, 2)
+  imageUrl      String?
+  category      String
+  isAvailable   Boolean            @default(true)
+  affiliateUrl  String
+  lastSyncedAt  DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  // Relationships
+  partner       MarketplacePartner @relation(fields: [partnerId], references: [id])
+  needs         Need[]
+  orderItems    OrderItem[]
+
+  @@unique([partnerId, externalId])
+  @@index([lastSyncedAt])
+  @@index([partnerId, externalId])
+}
+
+model Order {
+  id                       String             @id @default(uuid())
+  donationId               String             @unique
+  partnerId                String
+  externalOrderId          String?
+  status                   OrderStatus        @default(pending)
+  trackingNumber           String?
+  trackingUrl              String?
+  shippingAddress          Json
+  estimatedDelivery        DateTime?
+  actualDelivery           DateTime?
+  totalAmount              Decimal            @db.Decimal(10, 2)
+  affiliateCommissionEarned Decimal           @default(0) @db.Decimal(10, 2)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  // Relationships
+  donation                 Donation           @relation(fields: [donationId], references: [id])
+  partner                  MarketplacePartner @relation(fields: [partnerId], references: [id])
+  orderItems               OrderItem[]
+
+  @@index([status, createdAt])
+  @@index([donationId])
+}
+
+model OrderItem {
+  id          String             @id @default(uuid())
+  orderId     String
+  productId   String
+  quantity    Int
+  unitPrice   Decimal            @db.Decimal(10, 2)
+  createdAt   DateTime           @default(now())
+
+  // Relationships
+  order       Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     MarketplaceProduct @relation(fields: [productId], references: [id])
+}
+
+model Cause {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  description     String           @db.Text
+  category        String
+  imageUrl        String?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relationships
+  recipientCauses RecipientCause[]
+}
+
+model RecipientCause {
+  recipientId String
+  causeId     String
+  createdAt   DateTime @default(now())
+
+  // Relationships
+  recipient   RecipientProfile @relation(fields: [recipientId], references: [userId])
+  cause       Cause            @relation(fields: [causeId], references: [id])
+
+  @@id([recipientId, causeId])
+}
+
+model Milestone {
+  id            String   @id @default(uuid())
+  donatorId     String
+  milestoneType String
+  achievedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  // Relationships
+  donator       User     @relation(fields: [donatorId], references: [id], onDelete: Cascade)
+
+  @@unique([donatorId, milestoneType])
+  @@index([donatorId, achievedAt(sort: Desc)])
+  @@index([milestoneType])
+}

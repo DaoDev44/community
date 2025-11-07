@@ -1,0 +1,57 @@
+{
+  "name": "community-platform",
+  "version": "1.0.0",
+  "description": "CommUnity - Charitable Donation Matching Platform",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "shared"
+  ],
+  "scripts": {
+    "predev": "npm run services:start && npm run services:wait && npm run db:setup",
+    "dev": "concurrently -n \"backend,frontend\" -c \"blue,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "postdev": "echo '\n✨ Development servers stopped. Docker containers still running. Use: npm run services:stop'",
+
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+
+    "services:start": "docker-compose up -d",
+    "services:stop": "docker-compose down",
+    "services:restart": "docker-compose restart",
+    "services:logs": "docker-compose logs -f",
+    "services:status": "docker-compose ps",
+    "services:wait": "wait-on tcp:5432 tcp:9000 -t 30000",
+    "services:clean": "docker-compose down -v",
+
+    "db:setup": "npm run prisma:migrate --workspace=backend",
+    "db:migrate": "npm run prisma:migrate --workspace=backend",
+    "db:seed": "npm run prisma:seed --workspace=backend",
+    "db:studio": "npm run prisma:studio --workspace=backend",
+    "db:reset": "npm run services:clean && npm run predev && npm run db:seed",
+
+    "build": "npm run build --workspaces",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+
+    "test": "npm run test --workspaces",
+    "test:backend": "npm run test --workspace=backend",
+    "test:frontend": "npm run test --workspace=frontend",
+    "test:e2e": "npm run test:e2e --workspace=frontend",
+
+    "lint": "npm run lint --workspaces",
+    "format": "npm run format --workspaces",
+    "type-check": "npm run type-check --workspaces",
+
+    "clean": "npm run services:clean && rm -rf node_modules backend/node_modules frontend/node_modules shared/node_modules",
+    "setup": "npm install && npm run services:start && npm run services:wait && npm run db:setup && npm run db:seed"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "community-shared",
+  "version": "1.0.0",
+  "description": "CommUnity Platform - Shared TypeScript Types",
+  "main": "types/index.ts",
+  "type": "module",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": ["types", "shared"],
+  "author": "CommUnity Team",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
