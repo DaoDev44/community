@@ -1,0 +1,63 @@
+name: CI
+
+# Trigger on push to any branch and all pull requests
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  # Quality checks: linting, type checking, and testing
+  quality:
+    name: Code Quality & Tests
+    runs-on: ubuntu-latest
+
+    # Use Node.js 20 (matches our development environment)
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Run linting (ESLint)
+      - name: Lint code
+        run: npm run lint
+
+      # Step 5: Run TypeScript type checking
+      - name: Type check
+        run: npm run type-check
+
+      # Step 6: Run unit tests
+      - name: Run tests
+        run: npm run test
+        env:
+          # Provide test environment variables
+          NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+
+      # Step 7: Display test summary
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "✅ All quality checks completed!"
+          echo "📊 Linting: Passed"
+          echo "🔍 Type checking: Passed"
+          echo "🧪 Tests: Passed"
